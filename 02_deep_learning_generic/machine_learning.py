@@ -124,7 +124,7 @@ class DeepNetworkClass:
             y = Y[row,None]
             
             # forward propagation
-            for layer_i in range(self.dnn_l.size): 
+            for layer_i in range(self.dnn_l.size):
                 x = self.dnn_l[layer_i].forward(x)
                        
             # backward propagation
