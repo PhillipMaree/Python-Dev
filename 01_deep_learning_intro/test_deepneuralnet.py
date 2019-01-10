@@ -41,7 +41,7 @@ def generate_binary_dataset(random_seed=1104):
 '''
 Non-linear data classification set
 '''
-def generate_nonlinear_dataset(feature_size = 3, datapoints_size = 10 ):
+def generate_nonlinear_dataset(feature_size = 3, datapoints_size = 30 ):
     for i in range(0,datapoints_size):
         if i==0:
             X,Y = sample_fn( feature_size );
@@ -58,8 +58,8 @@ def sample_fn( feature_size ):
         y = x[i]**(i+1) ;
     return (x,y)
 
-def df_print(df, round_num=2):
-    print(np.round(df, 2))
+def df_print(df, round_num=6):
+    print(np.round(df, round_num))
 
 '''
 Test program script to learn
@@ -77,7 +77,7 @@ dnn_c = DeepNeuralNetClass( np.size(X, 1) );
 Run experiment
 '''
 losses = []
-epochs=1000;
+epochs=2000;
 epochs_list = []
 for i in range(epochs+1):
     dnn_c.train(X, Y);
