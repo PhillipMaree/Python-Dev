@@ -76,7 +76,7 @@ ny=1
 df=10
 X,Y = generate_binary_dataset();
 
-dnn_c = NeuralNetClass(nx,2,ny)
+dnn_c = NeuralNetClass(nx,3,ny)
 
 '''
 Run experiment
