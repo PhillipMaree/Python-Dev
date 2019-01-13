@@ -1,0 +1,1 @@
+This project implement deep learning on the MNIST data set.
