@@ -1,10 +1,28 @@
 import numpy as np
 from pyllist import dllist
 
-class NeuralLayerClass( ):
-    def __init__( self, layer_i, neurons_prev, neurons  ):
+class ActivationFnClass():
+    def __init__( self,neurons, fn_type='sigmoid' ):
+        self.fn_type = fn_type
+        self.dsigmadz = np.zeros([neurons])
+    
+    def sigma(self, *args ):       
+        if len(args) ==1:
+            z = args[0]
+            # sigmoid activation function
+            if self.fn_type == 'sigmoid':
+                sigma = 1/(1+np.exp(-z))
+                self.dsigmadz = sigma*(1-sigma)
+            return sigma
+        else:
+            return self.dsigmadz
+
+class NeuralLayerClass( ActivationFnClass  ):
+    def __init__( self, layer_i, neurons_prev, neurons, learning_rate  ):
+        ActivationFnClass.__init__(self, neurons )
         self.init(layer_i, neurons_prev, neurons )
-     
+        self.learning_rate=learning_rate
+        
     # initialize layers weights and structure    
     def init(self,layer_i, neurons_prev, neurons  ): 
         print( self.info( layer_i, neurons_prev, neurons ) )
@@ -12,33 +30,27 @@ class NeuralLayerClass( ):
         self.x    = np.zeros([neurons_prev,1])           # x inputs to layers
         self.z    = np.zeros([neurons])                  # z = w*x + b
         self.c    = np.zeros([neurons])                  # c = sigmoid( z )
-        self.w    = np.random.rand(neurons,neurons_prev) # weight combination of inputs x
+        self.w    = np.random.uniform(-1/np.sqrt(neurons_prev),1/np.sqrt(neurons_prev),[neurons,neurons_prev]    ) # weight combination of inputs x
         self.dldw = np.zeros([neurons,neurons_prev])     # cost sensitivity with change in weights
-        self.b    = np.random.rand(neurons,1)            # bias weight
+        self.b    = np.zeros([neurons,1])
         self.dldb = np.zeros([neurons,1])                # cost of sensitivity with change in bias
-                
-    # neuron activation function
-    def sigmoid(self, x,fward=True):
-        if fward==True:
-            return 1/(1+np.exp(-x))
-        else:
-            return self.sigmoid(x)*(1-self.sigmoid(x)) 
-        
+
     def forward(self, x,update=True):
         if update==True:
             # update of weights
-            self.w -= self.dldw
-            self.b -= self.dldb
+            self.w -= self.learning_rate*self.dldw
+            self.b -= self.learning_rate*self.dldb
         # forward propagation given updated weights
         self.x = x
         self.z = np.dot(self.w,self.x) + self.b
-        self.c = self.sigmoid( self.z )
+        self.c = self.sigma( self.z )
+
         return self.c
        
     def backward(self, y):
         
         dldc = y
-        dcdz = self.sigmoid( self.z, False )
+        dcdz = self.sigma()
         dldz = dldc*dcdz
         
         dzdw = np.tile(self.x.T, [np.size(self.w,0),1])
@@ -60,21 +72,28 @@ Generic Deep learning architecture
 class NeuralNetClass:
     
         
-    # Constructor
-    def __init__( self, *args ):
+    '''
+    Variable dnn structure arguments stipulating minimum 3 layers (input,hidden,output). Arguments in are
+    #neuron input layer, #neuron hidden layer 1, ...,#neuron hidden layer l, #neuron output layer L
+    '''
+    def __init__( self,layers, learning_rate=1 ): 
         
         MINIMUM_LAYER_COUNT = 3
-        if(len(args) < MINIMUM_LAYER_COUNT ):
+        if(len(layers) < MINIMUM_LAYER_COUNT ):
             raise ValueError("Minimum of %d layers required in DNN" % MINIMUM_LAYER_COUNT )
         else:
-            print("Initialize DNN with %d inputs, %d hidden layers with %d outputs]" % (args[0],len(args)-1,args[-1]) )
+            print("Initialize DNN with %d inputs, %d hidden layers with %d outputs]" % (layers[0],len(layers)-1,layers[-1]) )
             
             # construct dnn structure
             self.dnn_l = dllist();
-            for i in range(1,len(args)):
-                self.dnn_l.append( NeuralLayerClass( i, args[i-1],args[i] ))
+            for i in range(1,len(layers)):
+                self.dnn_l.append( NeuralLayerClass( i, layers[i-1],layers[i], learning_rate ))
+                
+        self.confusion_matrix = np.zeros([layers[-1],layers[-1]])
+        
             
     def train(self, X, Y):
+
         for row in range( 0,np.size(X,0) ):
             
             '''
@@ -86,16 +105,15 @@ class NeuralNetClass:
             # forward propagation
             for layer_i in range(self.dnn_l.size): 
                 x = self.dnn_l[layer_i].forward(x)
-
-                
+            
+                    
             # evaluate cost
-            l = self.cost(y, x)
             y = self.cost(y, x, False)
                        
             # backward propagation
             for layer_i in range(self.dnn_l.size):
                 y = self.dnn_l[self.dnn_l.size - layer_i-1].backward(y)
-                
+  
     '''
     For a new sample of features x, predict the output given the internal model structure
     '''
@@ -114,7 +132,15 @@ class NeuralNetClass:
             # forward propagation
             for layer_i in range(self.dnn_l.size): 
                 x = self.dnn_l[layer_i].forward(x,False)
-            p = np.append(p,x)
+            c_i = np.argmax(x)
+            c_j = np.argmax(y)
+            self.confusion_matrix[c_i,c_j]+=1
+            
+            if np.size(p)==0:
+                p=x.T
+            else:
+                p = np.append(p,x.T,axis=0)
+                                
             err=np.append(err,(x - y) ** 2)
         m = np.mean(err)    
   
@@ -123,6 +149,9 @@ class NeuralNetClass:
     # cost function evaluated on output layer   
     def cost(self, y, P, fward=True):
         if fward==True:
-            return 0.5*(y-P)**2;
+            return 0.5*(y-P)**2
         else:
-            return -(y-P);                        
+            return -(y-P) 
+        
+    def cm(self):
+        return self.confusion_matrix                  

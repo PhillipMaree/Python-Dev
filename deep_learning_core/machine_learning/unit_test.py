@@ -88,10 +88,8 @@ for i in range(epochs+1):
     dnn_c.train(X, Y);
     if i % (epochs / 10) == 0:
         prediction,err,loss_epoch = dnn_c.predict(X, Y);
-        epochs_list.append(i)
-        losses.append(loss_epoch)
+        df_print( pd.DataFrame({'epoch' : [i],'loss' : [loss_epoch]}) );
 
-df_print( pd.DataFrame({'epoch' : epochs_list,'loss' : losses}) );
 df_print( pd.DataFrame(data=np.concatenate([prediction[None].T, Y, err[None].T], axis=1),columns=['Prediction', 'Actual','Error']) )
 
 print('Done')
