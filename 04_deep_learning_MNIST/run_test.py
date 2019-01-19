@@ -3,7 +3,7 @@ Created on 01 Jan 2019
 
 @author: maree
 '''
-from machine_learning.deep_learning import NeuralNetClass
+from ai.dnn import NeuralNetClass
 from preprocess_mnist import DataWrapperClass
 from pathlib import Path
 import numpy as np
@@ -85,6 +85,8 @@ Run experiment
 X = train_imgs
 Y = train_labels_one_hot
 
+dnn_c.train(X, Y);
+dnn_c.train(X, Y);
 dnn_c.train(X, Y);
 
 X = test_imgs

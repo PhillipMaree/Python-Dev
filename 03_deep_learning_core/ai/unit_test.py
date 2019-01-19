@@ -3,10 +3,11 @@ Created on 01 Jan 2019
 
 @author: maree
 '''
-from deep_learning import NeuralNetClass 
+from dnn_SGD import NeuralNetClass 
 import  numpy as np
 import  pandas as pd
 import random
+import time
 '''
 Test function 
 '''
@@ -67,29 +68,57 @@ def sample_fn( feature_size, output_size ):
 
 def df_print(df, round_num=6):
     print(np.round(df, round_num))
+    
+'''
+Random sample a mini-batch size m from a training set 
+'''  
+def sample_batch(X,Y,batch_size ):
+    random_idx = random.sample(range( np.size(X, 0) ),  batch_size )
+        
+    x_batch = np.zeros([np.size(X, 1),batch_size])
+    y_batch = np.zeros([np.size(Y, 1),batch_size])    
+    for i in range( len(random_idx) ):        
+        x_batch[:,i] = X[random_idx[i]]
+        y_batch[:,i] = Y[random_idx[i]]  
+    return (x_batch, y_batch)  
      
 '''
 Generate data points and setup NN
 '''
-nx=3
-ny=1
-df=10
-X,Y = generate_binary_dataset();
+X_training,Y_training = generate_binary_dataset();
+X_testing,Y_testing = generate_binary_dataset();
 
-dnn_c = NeuralNetClass(nx,3,ny)
+learning_rate = 0.2
+num_feature = np.size(X_training,1)
+num_output = np.size(Y_training,1)
+
+dnn_c = NeuralNetClass([num_feature,4,num_output])
 
 '''
 Run experiment
 '''
-losses = []
-epochs=1000;
-epochs_list = []
-for i in range(epochs+1):
-    dnn_c.train(X, Y);
-    if i % (epochs / 10) == 0:
-        prediction,err,loss_epoch = dnn_c.predict(X, Y);
-        df_print( pd.DataFrame({'epoch' : [i],'loss' : [loss_epoch]}) );
+itr = 10000;
+batch_size = 8
+num_examples = np.size(X_training,0)
+try:
+    assert num_examples%batch_size == 0
+except AssertionError as error:
+    print('Batch size needs to be a factor of number of examples')
 
-df_print( pd.DataFrame(data=np.concatenate([prediction[None].T, Y, err[None].T], axis=1),columns=['Prediction', 'Actual','Error']) )
 
-print('Done')
+t0 = 0;
+dt = 0;
+for i in range(itr):
+    x_batch, y_batch = sample_batch(X_training,Y_training,batch_size )
+    t0 = time.time()
+    dnn_c.train( x_batch, y_batch )      # mini-batch generate
+    dt += time.time() - t0
+    if i*batch_size % num_examples == 0: # epoch counter
+        epoch_i = i*batch_size/num_examples
+        if epoch_i % 100 == 0:
+            prediction,err,loss_epoch = dnn_c.predict(X_testing, Y_testing);
+            print('Epoch %3d with loss %.5f with T %.5f secs' % (epoch_i,loss_epoch,dt))
+            dt = 0;
+        
+df_print( pd.DataFrame(data=np.concatenate([prediction, Y_testing, err[None].T], axis=1),columns=['Prediction', 'Actual','Error']) )
+
