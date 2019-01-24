@@ -13,13 +13,18 @@ class ActivationFnClass():
             if self.fn_type == 'sigmoid':
                 sigma = 1/(1+np.exp(-z))
                 self.dsigmadz = sigma*(1-sigma)
+            elif self.fn_type == 'relu':
+                z[z<=0] = 0
+                sigma = z
+                z[z>0] = 1 
+                self.dsigmadz=z               
             return sigma
         else:
             return self.dsigmadz
 
 class NeuralLayerClass( ActivationFnClass  ):
     def __init__( self, layer_i, neurons_prev, neurons, learning_rate  ):
-        ActivationFnClass.__init__(self, neurons )
+        ActivationFnClass.__init__(self, neurons,'sigmoid' )
         self.init(layer_i, neurons_prev, neurons )
         self.alpha = learning_rate
         
@@ -30,56 +35,47 @@ class NeuralLayerClass( ActivationFnClass  ):
         # forward pass weights
         self.w = np.random.uniform(-1/np.sqrt(neurons_prev),1/np.sqrt(neurons_prev),[neurons,neurons_prev]    ) # weight combination of inputs x
         self.beta = np.zeros([neurons,1])
-        self.gamma = np.random.uniform(-1/np.sqrt(neurons_prev),1/np.sqrt(neurons_prev),[neurons,1]    )  
+        self.gamma = np.ones([neurons,1])
         
         # backward pass weights
         self.dldw = np.zeros([neurons,neurons_prev])     # cost sensitivity with change in weights
         self.dldbeta = np.zeros([neurons,1])                # cost of sensitivity with change in bias
         self.dldgamma = np.zeros([neurons,1])
 
-    def forward(self, x,update=True):
+    def forward(self, x):
         
         self.x = x # x is raw input, [row,col] = [#features,#batch examples]        
-        self.u = np.dot(self.w,x) # intermediage weighted input on all members in batch 
+        
+        self.u = np.dot(self.w,x)
         self.mu = self.u.mean(1)[None].T # mean row wise 
         self.var = self.u.var(1)[None].T # variance row wise
         self.y = (self.u - self.mu)/( np.sqrt(self.var + 1e-8 )   )
         self.z = self.gamma*self.y + self.beta
         self.c = self.sigma( self.z )
-        print(self.beta)
+
         return self.c
 
     def backward(self, y):
         
         m = np.size(self.x,1)
- 
-        
-                
-        e = 1e-8
-        f = self.u
-        g = self.mu
-        h = (self.var + e)**-0.5
-        
-        dfdu = np.ones(np.size(self.u,axis=0))[None].T
-        dgdu = np.ones(np.shape(self.u))/m
-        dhdu = -(self.var + e)**(-3/2)*(self.u-self.mu)/m
-        dudx = self.w
-        dudw = self.x
         
         dldc = y
         dcdz = self.sigma()
         dzdy = self.gamma
-        dydu = (dfdu-dgdu)*h + (f-g)*dhdu
+        dldy = dldc*dcdz*dzdy
+        dldvar = np.sum( dldy*-1/2*( self.u-self.mu ), axis=1)[None].T*(self.var+ 1e-8)**(-3/2)
+        dldmu = np.sum( dldy*-1/np.sqrt(self.var + 1e-8 ), axis=1 )[None].T + dldvar*(-2/m)*np.sum( self.u-self.mu, axis=1 )[None].T
+        dldu = dldmu*np.ones(np.shape(self.u))/m + dldy/np.sqrt(self.var + 1e-8 ) + dldvar*2/m*( self.u-self.mu )
+        dldx = np.dot( dldu.T, self.w ).T
+        dldw = np.dot(dldu,self.x.T)
+        dldbeta = np.sum( dldy, axis=1)[None].T
+        dldgamma = np.sum( dldy*self.y, axis=1)[None].T
         
-        self.dldw =np.dot(dldc*dcdz*dzdy*dydu,dudw.T)
-        self.dldbeta = 1/m*np.sum( dldc*dcdz, axis=1)[None].T
-        self.dldgamma = 1/m*np.sum( dldc*dcdz*self.y, axis=1)[None].T
-        
-        self.w-=self.dldw
-        self.beta-=self.dldbeta
-        self.gamma-=self.dldgamma
-        
-        return np.dot((dldc*dcdz*dzdy*dydu).T,dudx).T
+        self.w -= self.alpha*dldw
+        self.beta -= self.alpha*dldbeta
+        self.gamma -= self.alpha*dldgamma
+    
+        return dldx
     
     def info( self,  layer_i, neurons_prev, neurons  ):
         return "Add hidden layer %s with %d input(s) and %d neuron(s)" % ( layer_i, neurons_prev, neurons  )    
@@ -122,7 +118,8 @@ class NeuralNetClass:
         # evaluate cost
         y = y_batch
         P = x_batch
-        dldc = self.cost(P, y, False)
+        dldc = self.cost(y,P, False)
+        
         y_batch = dldc
         
                    
@@ -135,32 +132,17 @@ class NeuralNetClass:
     '''
     def predict( self, x_batch, y_batch ):
         
-        p = []
-        err=[]
-        for row in range( 0,np.size(x_batch,0) ):
-            
-            '''
-            Features and meausured output
-            '''
-            x = x_batch[row,:,None]
-            y = y_batch[row,None]
-            
-            # forward propagation
-            for layer_i in range(self.dnn_l.size): 
-                x = self.dnn_l[layer_i].forward(x,False)
-            c_i = np.argmax(x)
-            c_j = np.argmax(y)
-            self.confusion_matrix[c_i,c_j]+=1
-            
-            if np.size(p)==0:
-                p=x.T
-            else:
-                p = np.append(p,x.T,axis=0)
-                                
-            err=np.append(err,(x - y) ** 2)
-        m = np.mean(err)    
-  
-        return (p,err,m);
+        # forward propagation
+        for layer_i in range(self.dnn_l.size): 
+            x_batch = self.dnn_l[layer_i].forward(x_batch)
+        
+        p=x_batch
+        l = np.abs(y_batch-p)    
+        m = np.mean(l)
+        
+        return (p,l,m);
+        
+
  
     # cost function evaluated on output layer   
     def cost(self, y, P, fward=True):

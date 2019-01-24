@@ -3,7 +3,7 @@ Created on 01 Jan 2019
 
 @author: maree
 '''
-from dnn_SGD import NeuralNetClass 
+from dnn_bSGD import NeuralNetClass 
 import  numpy as np
 import  pandas as pd
 import random
@@ -86,13 +86,13 @@ def sample_batch(X,Y,batch_size ):
 Generate data points and setup NN
 '''
 X_training,Y_training = generate_binary_dataset();
-X_testing,Y_testing = generate_binary_dataset();
+X_testing,Y_testing = generate_binary_dataset()
 
 learning_rate = 0.2
 num_feature = np.size(X_training,1)
 num_output = np.size(Y_training,1)
 
-dnn_c = NeuralNetClass([num_feature,4,num_output])
+dnn_c = NeuralNetClass([num_feature,4,num_output],2)
 
 '''
 Run experiment
@@ -105,20 +105,22 @@ try:
 except AssertionError as error:
     print('Batch size needs to be a factor of number of examples')
 
-
 t0 = 0;
 dt = 0;
 for i in range(itr):
     x_batch, y_batch = sample_batch(X_training,Y_training,batch_size )
     t0 = time.time()
+    #print('Training')
     dnn_c.train( x_batch, y_batch )      # mini-batch generate
     dt += time.time() - t0
     if i*batch_size % num_examples == 0: # epoch counter
         epoch_i = i*batch_size/num_examples
-        if epoch_i % 100 == 0:
-            prediction,err,loss_epoch = dnn_c.predict(X_testing, Y_testing);
-            print('Epoch %3d with loss %.5f with T %.5f secs' % (epoch_i,loss_epoch,dt))
+        if epoch_i % 500 == 0:
+            #print('Prediction')
+            
+            prediction,loss,mean_loss = dnn_c.predict(X_testing.T, Y_testing.T)
+            print('Epoch %3d with loss %.5f with T %.5f secs' % (epoch_i,mean_loss,dt))            
             dt = 0;
         
-df_print( pd.DataFrame(data=np.concatenate([prediction, Y_testing, err[None].T], axis=1),columns=['Prediction', 'Actual','Error']) )
+df_print( pd.DataFrame(data=np.concatenate([prediction.T, Y_testing, loss.T], axis=1),columns=['Prediction', 'Actual','Loss']) )
 
