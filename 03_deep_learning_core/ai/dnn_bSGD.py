@@ -113,16 +113,10 @@ class NeuralNetClass:
         # forward propagation
         for layer_i in range(self.dnn_l.size): 
             x_batch = self.dnn_l[layer_i].forward(x_batch)
-        
-                
+                  
         # evaluate cost
-        y = y_batch
-        P = x_batch
-        dldc = self.cost(y,P, False)
-        
-        y_batch = dldc
-        
-                   
+        y_batch = self.cost(y_batch,x_batch, False)
+               
         # backward propagation
         for layer_i in range(self.dnn_l.size):
             y_batch = self.dnn_l[self.dnn_l.size - layer_i-1].backward(y_batch)

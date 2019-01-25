@@ -92,35 +92,27 @@ class NeuralNetClass:
         self.confusion_matrix = np.zeros([layers[-1],layers[-1]])
         
             
-    def train(self, X, Y):
+    def train(self, x_batch, y_batch):
 
-        for col in range( 0,np.size(X,0) ):
-            
-            '''
-            Features and meausured output
-            '''
-            x = X[:,col,None]
-            y = Y[:,col,None]
-            
-            # forward propagation
-            for layer_i in range(self.dnn_l.size): 
-                x = self.dnn_l[layer_i].forward(x)
-            
-                    
-            # evaluate cost
-            y = self.cost(y, x, False)
-                       
-            # backward propagation
-            for layer_i in range(self.dnn_l.size):
-                y = self.dnn_l[self.dnn_l.size - layer_i-1].backward(y)
-  
+        # forward propagation
+        for layer_i in range(self.dnn_l.size): 
+            x_batch = self.dnn_l[layer_i].forward(x_batch)
+          
+                  
+        # evaluate cost
+        y_batch = self.cost(y_batch, x_batch, False)
+                     
+        # backward propagation
+        for layer_i in range(self.dnn_l.size):
+            y_batch = self.dnn_l[self.dnn_l.size - layer_i-1].backward(y_batch)
+    
     '''
     For a new sample of features x, predict the output given the internal model structure
     '''
     def predict( self, X, Y ):
         
         p = []
-        err=[]
+        l =[]
         for row in range( 0,np.size(X,0) ):
             
             '''
@@ -141,10 +133,10 @@ class NeuralNetClass:
             else:
                 p = np.append(p,x.T,axis=0)
                                 
-            err=np.append(err,(x - y) ** 2)
-        m = np.mean(err)    
+            l=np.append(l,np.abs(x - y) )
+        m = np.mean(l)    
   
-        return (p,err,m);
+        return (p,l,m);
  
     # cost function evaluated on output layer   
     def cost(self, y, P, fward=True):
