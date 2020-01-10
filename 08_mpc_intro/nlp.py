@@ -1,30 +1,30 @@
 import casadi as ca
 import numpy as np
-from ocp import CstrOCP
-
-''' The defined OCP is transcribed into a NLP problem '''
+from ocp import CstrOCP as ocp
 
 
-class NLP(CstrOCP):
+# construct the NLP from the inherited OCP problem. NLP formulation to the terminology of Betts, 2010, Ch4
+class NLP:
     def __init__(self, td, N):
-        CstrOCP.__init__(self)
+
+        self.ocp = ocp()
 
         self.nlp_config = {'collocation_method': 'legendre',
                            'collocation_degree': 3,
-                           'time_horizon': td*N,
+                           'time_horizon': td * N,
                            'num_phases': N,
                            'phase_step_size': td}
         # nlp structure
-        self.nlp = {'f': 0, 'x': [], 'x0': [], 'lbx': [], 'ubx': [], 'g': [], 'lbg': [], 'ubg': [], 'solver': lambda x0, lbx, ubx, lbg, ubg : ()}
+        self.nlp = {'J': 0, 'z': [], 'z0': [], 'lbz': [], 'ubz': [], 'g': [], 'lbg': [], 'ubg': [], 'solver': lambda z0, lbz, ubz, lbg, ubg: ()}
 
         # nlp plotting
-        self.plot = {'x': [], 'u': []}
+        self.plot = {'y': [], 'u': []}
 
         # collocation polynomial coefficients
         self.B, self.C, self.D = self.collocation_polynomial()
         self.generate_nlp()
 
-        print("NLP formulation for: %s" % self.get_name() )
+        print("NLP formulation for: %s" % self.ocp.name)
 
     def collocation_polynomial(self):
 
@@ -33,29 +33,28 @@ class NLP(CstrOCP):
 
         # Get collocation points
         tau_root = np.append(0, ca.collocation_points(degree, method))
-
         # Coefficients of the quadrature function
-        B = np.zeros(degree+1)
+        B = np.zeros(degree + 1)
         # Coefficients of the collocation equation
-        C = np.zeros((degree+1,degree+1))
+        C = np.zeros((degree + 1, degree + 1))
         # Coefficients of the continuity equation
-        D = np.zeros(degree+1)
+        D = np.zeros(degree + 1)
 
         # Construct polynomial basis
-        for j in range(degree+1):
+        for j in range(degree + 1):
             # Construct Lagrange polynomials to get the polynomial basis at the collocation point
             p = np.poly1d([1])
-            for r in range(degree+1):
+            for r in range(degree + 1):
                 if r != j:
-                    p *= np.poly1d([1, -tau_root[r]]) / (tau_root[j]-tau_root[r])
+                    p *= np.poly1d([1, -tau_root[r]]) / (tau_root[j] - tau_root[r])
 
             # Evaluate the polynomial at the final time to get the coefficients of the continuity equation
             D[j] = p(1.0)
 
             # Evaluate the time derivative of the polynomial at all collocation points to get the coefficients of the continuity equation
             pder = np.polyder(p)
-            for r in range(degree+1):
-                C[j,r] = pder(tau_root[r])
+            for r in range(degree + 1):
+                C[j, r] = pder(tau_root[r])
 
             # Evaluate the integral of the polynomial to get the coefficients of the quadrature function
             pint = np.polyint(p)
@@ -71,89 +70,93 @@ class NLP(CstrOCP):
         degree = self.nlp_config['collocation_degree']
 
         # "Lift" initial conditions
-        x_k = ca.MX.sym('x_0', self.n_x)
-        self.nlp['x'].append(x_k)
-        self.nlp['lbx'].append(self.x.lb)
-        self.nlp['ubx'].append(self.x.ub)
-        self.nlp['x0'].append(self.x.lb)
-        self.plot['x'].append(x_k)
+        y_k = ca.MX.sym(self.ocp.y.name() + '_0', self.ocp.y.dim())
+        self.nlp['z'].append(y_k)
+        self.nlp['lbz'].append(self.ocp.y.lb())
+        self.nlp['ubz'].append(self.ocp.y.ub())
+        self.nlp['z0'].append(self.ocp.y.lb())
+        self.plot['y'].append(y_k)
 
         for phase_k in range(N):
             # piece-wise constant control at phase
-            u_k = ca.MX.sym('u_' + str(phase_k))
-            self.nlp['x'].append(u_k)
-            self.nlp['lbx'].append(self.u.lb)
-            self.nlp['ubx'].append(self.u.ub)
-            self.nlp['x0'].append(1.1*self.u.lb)
+            u_k = ca.MX.sym(self.ocp.u.name() + '_' + str(phase_k))
+            # append controls
+            self.nlp['z'].append(u_k)
+            self.nlp['lbz'].append(self.ocp.u.lb())
+            self.nlp['ubz'].append(self.ocp.u.ub())
+            self.nlp['z0'].append(self.ocp.u.lb())
             self.plot['u'].append(u_k)
 
             # add symbolic variables for phase k collocation points
-            x_c = []
+            y_c = []
             for tau_j in range(degree):
                 # boundary initial state condition (initial boundary condition)
-                x_k_j = ca.MX.sym('x_'+str(phase_k)+'_'+str(tau_j),self.n_x)
-                x_c.append(x_k_j)
-                self.nlp['x'].append(x_k_j)
-                self.nlp['lbx'].append(self.x.lb)
-                self.nlp['ubx'].append(self.x.ub)
-                self.nlp['x0'].append(1.1*self.x.lb)
+                y_k_j = ca.MX.sym(self.ocp.y.name() + '_' + str(phase_k) + '_' + str(tau_j), self.ocp.y.dim())
+                y_c.append(y_k_j)
+                self.nlp['z'].append(y_k_j)
+                self.nlp['lbz'].append(self.ocp.y.lb())
+                self.nlp['ubz'].append(self.ocp.y.ub())
+                self.nlp['z0'].append(self.ocp.y.lb())
 
             # assign equality constraints for polynomial interpolation
-            x_k_f = self.D[0]*x_k
+            y_k_end = self.D[0] * y_k
             for tau_j in range(degree):
-                x_p = self.C[0, tau_j+1]*x_k
-                for tau_r in range(degree): x_p += self.C[tau_r+1,tau_j+1]*x_c[tau_r]
+                y_p = self.C[0, tau_j + 1] * y_k
+                for tau_r in range(degree): y_p += self.C[tau_r + 1, tau_j + 1] * y_c[tau_r]
 
-                f_tau_j, q_tau_j = self.fn(x_c[tau_j],u_k)
+                if self.ocp.has_DAE():
+                    # TODO handle DAE
+                    f_tau_j, g_tau_j, w_tau_j = self.ocp.ocp_fn(y_c[tau_j], u_k)
+                else:
+                    f_tau_j, w_tau_j = self.ocp.ocp_fn(y_c[tau_j], u_k)
 
-                self.nlp['g'].append( h*f_tau_j - x_p ) # TODO
-                self.nlp['lbg'].append(np.zeros(self.n_x))
-                self.nlp['ubg'].append(np.zeros(self.n_x))
+                self.nlp['g'].append(h * f_tau_j - y_p)
+                self.nlp['lbg'].append(np.zeros(self.ocp.y.dim()))
+                self.nlp['ubg'].append(np.zeros(self.ocp.y.dim()))
 
-                x_k_f += self.D[tau_j+1]*x_c[tau_j]
+                y_k_end += self.D[tau_j + 1] * y_c[tau_j]
 
-                self.nlp['f'] += self.B[tau_j+1]*q_tau_j*h
+                self.nlp['J'] += self.B[tau_j + 1] * w_tau_j * h
 
-            # create state variable for next phase
-            x_k = ca.MX.sym('x_' + str(phase_k+1), self.n_x)
-            self.nlp['x'].append(x_k)
-            self.nlp['lbx'].append(self.x.lb)
-            self.nlp['ubx'].append(self.x.ub)
-            self.nlp['x0'].append(1.1*self.x.lb)
-            self.plot['x'].append(x_k)
+            y_k = ca.MX.sym(self.ocp.y.name() + '_' + str(phase_k + 1), self.ocp.y.dim())
+            self.nlp['z'].append(y_k)
+            self.nlp['lbz'].append(self.ocp.y.lb())
+            self.nlp['ubz'].append(self.ocp.y.ub())
+            self.nlp['z0'].append(self.ocp.y.lb())
+            self.plot['y'].append(y_k)
 
             # enforce continuity constraint
-            self.nlp['g'].append( x_k_f - x_k ) # TODO
-            self.nlp['lbg'].append(np.zeros(self.n_x))
-            self.nlp['ubg'].append(np.zeros(self.n_x))
+            self.nlp['g'].append(y_k_end - y_k)
+            self.nlp['lbg'].append(np.zeros(self.ocp.y.dim()))
+            self.nlp['ubg'].append(np.zeros(self.ocp.y.dim()))
 
         # Concatenate vectors
-        self.nlp['x'] = ca.vertcat(*self.nlp['x'])
+        self.nlp['z'] = ca.vertcat(*self.nlp['z'])
         self.nlp['g'] = ca.vertcat(*self.nlp['g'])
-        self.plot['x'] = ca.horzcat(*self.plot['x'])
+        self.plot['y'] = ca.horzcat(*self.plot['y'])
         self.plot['u'] = ca.horzcat(*self.plot['u'])
-        self.nlp['x0'] = np.concatenate(self.nlp['x0'])
-        self.nlp['lbx'] = np.concatenate(self.nlp['lbx'])
-        self.nlp['ubx'] = np.concatenate(self.nlp['ubx'])
+        self.nlp['z0'] = np.concatenate(self.nlp['z0'])
+        self.nlp['lbz'] = np.concatenate(self.nlp['lbz'])
+        self.nlp['ubz'] = np.concatenate(self.nlp['ubz'])
         self.nlp['lbg'] = np.concatenate(self.nlp['lbg'])
         self.nlp['ubg'] = np.concatenate(self.nlp['ubg'])
 
         # construct nlp solver
-        prob = {'f': self.nlp['f'], 'x': self.nlp['x'], 'g': self.nlp['g']}
+        prob = {'f': self.nlp['J'], 'x': self.nlp['z'], 'g': self.nlp['g']}
         self.nlp['solver'] = ca.nlpsol('solver', 'ipopt', prob)
 
-    def solve_nlp(self,*x_0):
+    def solve_nlp(self, *x_0):
         # enforce initial conditions
-        self.nlp['x0'][0:self.n_x] = x_0[1:]
-        self.nlp['lbx'][0:self.n_x] = x_0[1:]
-        self.nlp['ubx'][0:self.n_x] = x_0[1:]
-        #solve nlp problem
-        return self.nlp['solver'](x0=self.nlp['x0'], lbx=self.nlp['lbx'], ubx=self.nlp['ubx'],lbg=self.nlp['lbg'],ubg=self.nlp['ubg'])
+        self.nlp['z0'][0:self.ocp.y.dim()] = x_0[1:]
+        self.nlp['lbz'][0:self.ocp.y.dim()] = x_0[1:]
+        self.nlp['ubz'][0:self.ocp.y.dim()] = x_0[1:]
+        # solve nlp problem
+        return self.nlp['solver'](x0=self.nlp['z0'], lbx=self.nlp['lbz'], ubx=self.nlp['ubz'], lbg=self.nlp['lbg'],ubg=self.nlp['ubg'])
 
-    def solve(self,*x_0):
-        sol = self.solve_nlp(self,*x_0)
-        trajectories = ca.Function('trajectories', [self.nlp['x']], [self.plot['x'], self.plot['u']], ['x'], ['x', 'u'])
-        x_opt, u_opt = trajectories(sol['x'])
-        x_opt = x_opt.full()
+    def solve(self, *y_0):
+        sol = self.solve_nlp(self, *y_0)
+        trajectories = ca.Function('trajectories', [self.nlp['z']], [self.plot['y'], self.plot['u']], ['z'], ['y', 'u'])
+        y_opt, u_opt = trajectories(sol['x'])
+        y_opt = y_opt.full()
         u_opt = u_opt.full()
-        return x_opt, u_opt
+        return y_opt, u_opt

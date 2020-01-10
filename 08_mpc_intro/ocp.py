@@ -1,50 +1,67 @@
 import casadi as ca
 import numpy as np
 
-''' This class defines the optimal control problem to be solved'''
-
-
+# This class defines the optimal control problem to be solved according to the terminology of Betts, 2010 Ch4
 class OCP:
 
-    class Signal:
-        def __init__(self,var_name,var_lb,var_ub,var_n):
-            self.var_name = var_name
-            self.lb = var_lb
-            self.ub = var_ub
-            self.n = var_n
-            self.var = ca.MX.sym(var_name,1,self.n)
+    class Variable:
+        def __init__(self,name,lb,ub,dim):
+            self.var_name = name
+            self.var_lb = lb
+            self.var_ub = ub
+            self.var_dim = dim
+            self.mx_var = ca.MX.sym(name,1,self.var_dim)
 
-        def var(self): return self.var_name
-        def lb(self): return self.lb
-        def ub(self): return self.ub
-        def s(self): return self.var
+        def name(self): return self.var_name
+        def lb(self): return self.var_lb
+        def ub(self): return self.var_ub
+        def var(self): return self.mx_var
+        def dim(self): return self.var_dim
 
-    def __init__(self,name="Empty OPC formulation",n_x=0,n_u=0):
-        # initialize minimum characteristics
-        self.n_x = n_x
-        self.n_u = n_u
+    def __init__(self,name="Empty OPC formulation",n_y=0, n_u=0):
+        # problem name description
         self.name = name
+        # dynamic state variables
+        self.y = self.Variable('y',self.y_min(), self.y_max(),n_y)
+        # dynamic control variables
+        self.u = self.Variable('u',self.u_min(), self.u_max(),n_u)
+        # system parameters
+        self.p = self.parameters()
+        # dynamics of system in explicit ODE form
+        self.f = self.state_equations()
+        # algebraic path constraints
+        self.g = self.path_constraints()
+        # cost functional
+        self.w = self.quadrature_functions()
+        # casadi ocp functional
+        self.ocp_fn = self.casadi_functional()
 
-        # construct system dimensions
-        self.x = self.Signal('x',self.xmin(), self.xmax(),self.n_x)
-        self.u = self.Signal('u',self.umin(), self.umax(),self.n_u)
+        # casadi ocp functional with ODE and DAE functionals
+        self.ocp_fn = ca.Function('ocp_fn', [self.y.var(), self.u.var()], [self.f, self.g, self.w], ['y', 'u'], ['f', 'g', 'w'])
+        # casadi ocp functional with ODE functionals
+        self.ocp_fn = ca.Function('ocp_fn', [self.y.var(), self.u.var()], [self.f, self.w], ['y', 'u'], ['f', 'w'])
 
-        # obtain core context of opc problem
-        self.p = self.get_parameters()
-        self.ode = self.get_ode()
-        self.l = self.get_l()
+    # casadi funcitonal to be called in NLP problem formulation
+    def casadi_functional(self):
+        if self.g.nnz() == 0:
+            return ca.Function('fn_yu_fw', [self.y.var(), self.u.var()], [self.f, self.w], ['y', 'u'], ['f', 'w'])
+        else:
+            return ca.Function('fn_yu_fgw', [self.y.var(), self.u.var()], [self.f, self.g, self.w], ['y', 'u'], ['f', 'g', 'w'])
+    # determine if
+    def has_DAE(self):
+        if self.ocp_fn.name() == 'fn_yu_fgw':
+            return True
+        return False
 
-        # construct functional
-        self.fn = ca.Function('fn', [self.x.s(), self.u.s()], [self.ode, self.l], ['x', 'u'], ['ode', 'l'])
-
-    def get_name(self): return self.name
-    def get_parameters(self): return []
-    def get_ode(self): return ca.vertcat()
-    def get_l(self): return 0
-    def umin(self): return 0
-    def umax(self): return 0
-    def xmin(self): return 0
-    def xmax(self): return 0
+    # functions to be overwritten in problem child OCP class
+    def parameters(self): return []
+    def state_equations(self): return ca.vertcat()
+    def path_constraints(self): return ca.vertcat()
+    def quadrature_functions(self): return ca.vertcat()
+    def y_min(self): return np.array([])
+    def y_max(self): return np.array([])
+    def y_min(self): return np.array([])
+    def y_max(self): return np.array([])
 
 
 ''' New OPC formulations should be defined here, inheriting the base OCP class '''
@@ -53,20 +70,18 @@ class OCP:
 class CstrOCP(OCP):
 
     def __init__(self):
-        self.n_x = 3
-        self.n_u = 1
-        OCP.__init__(self,"Acetylene hydrogenation process",self.n_x,self.n_u)
+        OCP.__init__(self,"Acetylene hydrogenation process", 3, 1)
 
-    def get_parameters(self):
+    def parameters(self):
         return {'sigma1': 1000, 'sigma2': 472, 'beta': 23}
 
-    def get_ode(self):
+    def state_equations(self):
 
-        x1 = self.x.s()[0]
-        x2 = self.x.s()[1]
-        x3 = self.x.s()[2]
+        x1 = self.y.var()[0]
+        x2 = self.y.var()[1]
+        x3 = self.y.var()[2]
 
-        u1 = self.u.s()[0]
+        u1 = self.u.var()[0]
 
         sigma1 = self.p['sigma1']
         sigma2 = self.p['sigma2']
@@ -75,28 +90,27 @@ class CstrOCP(OCP):
         a = sigma1*x1*x2/(1+beta*x1)
         b = sigma2*x2**0.5*x3/(1+beta*x1)
 
-        dx1 = 1-x1-a
-        dx2 = u1-x2-a-b
-        dx3 = -x3+a-b
+        odef1 = 1-x1-a
+        odef2 = u1-x2-a-b
+        odef3 = -x3+a-b
 
-        return ca.vertcat(dx1, dx2, dx3)
+        return ca.vertcat(odef1, odef2, odef3)
 
-    def get_l(self):
-        x3 = self.x.s()[2]
-        return -x3
+    def quadrature_functions(self):
+        return -self.y.var()[2]
 
         # variable constraints
-    def umin(self):
+    def u_min(self):
         return np.array([0.1])
 
-    def umax(self):
-        return np.array([5])
+    def u_max(self):
+        return np.array([5.0])
 
-    def xmin(self):
-        return np.array([0,0,0])
+    def y_min(self):
+        return np.array([0.0,0.0,0.0])
 
-    def xmax(self):
-        return np.array([1,1,1])
+    def y_max(self):
+        return np.array([1.0,1.0,1.0])
 
 
 

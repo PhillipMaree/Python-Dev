@@ -10,9 +10,8 @@ class NMPC(NLP):
     def __init__(self, td, tf, N):
         NLP.__init__(self, td, N)
 
-    def simulate(self, *x_0):
-        x_opt, u_opt = self.solve(*x_0)
-        return x_opt, u_opt
+    def simulate(self, *y_0):
+        return self.solve(*y_0)
 
 
 if __name__ == '__main__':
@@ -26,25 +25,23 @@ if __name__ == '__main__':
     # initial state
 
     # solve NMPC for closed-loop operation
-    x_0 = [0.0,0.0,0.0]
-    x_opt, u_opt = NMPC(td, tf, N).simulate(*x_0)
+    y_0 = [0.1,0.1,0.1]
+    y_opt, u_opt = NMPC(td, tf, N).simulate(*y_0)
 
     # Plot the result
     tgrid = np.linspace(0, tf, N+1)
     plt.figure(1)
     plt.clf()
-    plt.plot(tgrid, x_opt[0], '--')
-    plt.plot(tgrid, x_opt[1], '-')
-    plt.plot(tgrid, x_opt[2], '-')
+    plt.plot(tgrid, y_opt[0], '--')
+    plt.plot(tgrid, y_opt[1], '-')
+    plt.plot(tgrid, y_opt[2], '-')
     plt.xlabel('t')
-    plt.legend(['u1'])
-    plt.grid()
-    plt.show()
+    plt.legend(['y1','y2','y3'])
 
     plt.figure(2)
     plt.clf()
     plt.step(tgrid, np.append(np.nan, u_opt[0]), '-.')
     plt.xlabel('t')
-    plt.legend(['x1','x2','x3'])
+    plt.legend(['u1'])
     plt.grid()
     plt.show()
