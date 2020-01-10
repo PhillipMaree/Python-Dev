@@ -5,6 +5,8 @@ from ocp import CstrOCP as ocp
 
 # construct the NLP from the inherited OCP problem. NLP formulation to the terminology of Betts, 2010, Ch4
 class NLP:
+
+
     def __init__(self, td, N):
 
         self.ocp = ocp()
@@ -13,15 +15,19 @@ class NLP:
                            'collocation_degree': 3,
                            'time_horizon': td * N,
                            'num_phases': N,
-                           'phase_step_size': td}
+                           'phase_step_size': td,
+                           'warm_start': True}
+
         # nlp structure
-        self.nlp = {'J': 0, 'z': [], 'z0': [], 'lbz': [], 'ubz': [], 'g': [], 'lbg': [], 'ubg': [], 'solver': lambda z0, lbz, ubz, lbg, ubg: ()}
+        self.nlp = {'J': 0, 'z': [], 'z0': [], 'lbz': [], 'ubz': [], 'g': [], 'lbg': [], 'ubg': [], 'warmstart': [], 'solver': lambda z0, lbz, ubz, lbg, ubg: ()}
 
         # nlp plotting
         self.plot = {'y': [], 'u': []}
 
         # collocation polynomial coefficients
         self.B, self.C, self.D = self.collocation_polynomial()
+
+        # construct nlp problem
         self.generate_nlp()
 
         print("NLP formulation for: %s" % self.ocp.name)
@@ -73,7 +79,7 @@ class NLP:
         y_k = ca.MX.sym(self.ocp.y.name() + '_0', self.ocp.y.dim())
         self.nlp['z'].append(y_k)
         self.nlp['lbz'].append(self.ocp.y.lb())
-        self.nlp['ubz'].append(self.ocp.y.ub())
+        self.nlp['ubz'].append(self.ocp.y.lb())
         self.nlp['z0'].append(self.ocp.y.lb())
         self.plot['y'].append(y_k)
 
@@ -145,18 +151,21 @@ class NLP:
         prob = {'f': self.nlp['J'], 'x': self.nlp['z'], 'g': self.nlp['g']}
         self.nlp['solver'] = ca.nlpsol('solver', 'ipopt', prob)
 
-    def solve_nlp(self, *x_0):
+    def solve_nlp(self, *y_0):
         # enforce initial conditions
-        self.nlp['z0'][0:self.ocp.y.dim()] = x_0[1:]
-        self.nlp['lbz'][0:self.ocp.y.dim()] = x_0[1:]
-        self.nlp['ubz'][0:self.ocp.y.dim()] = x_0[1:]
-        # solve nlp problem
-        return self.nlp['solver'](x0=self.nlp['z0'], lbx=self.nlp['lbz'], ubx=self.nlp['ubz'], lbg=self.nlp['lbg'],ubg=self.nlp['ubg'])
+        self.nlp['z0'][0:self.ocp.y.dim()] = y_0
+        self.nlp['lbz'][0:self.ocp.y.dim()] = y_0
+        self.nlp['ubz'][0:self.ocp.y.dim()] = y_0
 
-    def solve(self, *y_0):
-        sol = self.solve_nlp(self, *y_0)
-        trajectories = ca.Function('trajectories', [self.nlp['z']], [self.plot['y'], self.plot['u']], ['z'], ['y', 'u'])
-        y_opt, u_opt = trajectories(sol['x'])
-        y_opt = y_opt.full()
-        u_opt = u_opt.full()
-        return y_opt, u_opt
+        # call defined solver
+        solution = self.nlp['solver'](x0=self.nlp['z0'], lbx=self.nlp['lbz'], ubx=self.nlp['ubz'], lbg=self.nlp['lbg'],ubg=self.nlp['ubg'])
+
+        # overwrite z0 for hot start in next nlp solution
+        if self.nlp_config['warm_start']:
+            self.nlp['z0'] = np.array(solution['x']).flatten()
+
+        # parse trajectories
+        y_opt, u_opt = ca.Function('trajectories', [self.nlp['z']], [self.plot['y'], self.plot['u']], ['z'], ['y', 'u'])(solution['x'])
+
+        return y_opt.full(), u_opt.full()
+

@@ -101,13 +101,13 @@ class CstrOCP(OCP):
 
         # variable constraints
     def u_min(self):
-        return np.array([0.1])
+        return np.array([1e-3])
 
     def u_max(self):
         return np.array([5.0])
 
     def y_min(self):
-        return np.array([0.0,0.0,0.0])
+        return np.array([1e-3,1e-3,1e-3])
 
     def y_max(self):
         return np.array([1.0,1.0,1.0])
