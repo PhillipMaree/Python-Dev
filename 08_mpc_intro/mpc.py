@@ -32,13 +32,16 @@ if __name__ == '__main__':
     # initial state
 
     # solve NMPC for closed-loop operation
-    y_0 = [0.1, 0.2, 0.3]
+    y_0 = [0.25, 0.25, 0.25]
     df = NMPC(td, tf, N,).run(*y_0)
 
     fig = plt.figure()
-    ax1 = fig.add_subplot(211)
-    df.plot(x='time', y=['y1','y2','y3'], ax=ax1)
-
-    ax2 = fig.add_subplot(212)
-    df.plot(x='time', y='u', ax=ax2,drawstyle="steps")
+    ax1 = fig.add_subplot(221)
+    df.plot(x='time', y='y1', ax=ax1)
+    ax2 = fig.add_subplot(222)
+    df.plot(x='time', y='y2', ax=ax2)
+    ax3 = fig.add_subplot(223)
+    df.plot(x='time', y='y3', ax=ax3)
+    ax4 = fig.add_subplot(224)
+    df.plot(x='time', y='u', ax=ax4,drawstyle="steps")
     plt.show()

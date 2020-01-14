@@ -18,9 +18,11 @@ class OCP:
         def var(self): return self.mx_var
         def dim(self): return self.var_dim
 
-    def __init__(self,name="Empty OPC formulation",n_y=0, n_u=0):
+    def __init__(self,t , n_y=0, n_u=0, name="Empty OPC formulation"):
         # problem name description
         self.name = name
+        # time indexing
+        self.t = self.Variable('t',0 , t ,1)
         # dynamic state variables
         self.y = self.Variable('y',self.y_min(), self.y_max(),n_y)
         # dynamic control variables
@@ -28,40 +30,42 @@ class OCP:
         # system parameters
         self.p = self.parameters()
         # dynamics of system in explicit ODE form
-        self.f = self.state_equations()
+        self.f = self.f_fn()
         # algebraic path constraints
-        self.g = self.path_constraints()
+        self.g = self.g_fn()
         # cost functional
-        self.w = self.quadrature_functions()
+        self.w = self.w_fn()
         # casadi ocp functional
-        self.ocp_fn = self.casadi_functional()
-
-        # casadi ocp functional with ODE and DAE functionals
-        self.ocp_fn = ca.Function('ocp_fn', [self.y.var(), self.u.var()], [self.f, self.g, self.w], ['y', 'u'], ['f', 'g', 'w'])
-        # casadi ocp functional with ODE functionals
-        self.ocp_fn = ca.Function('ocp_fn', [self.y.var(), self.u.var()], [self.f, self.w], ['y', 'u'], ['f', 'w'])
+        self.F = self.F_fn()
 
     # casadi funcitonal to be called in NLP problem formulation
-    def casadi_functional(self):
+    def F_fn(self):
         if self.g.nnz() == 0:
-            return ca.Function('fn_yu_fw', [self.y.var(), self.u.var()], [self.f, self.w], ['y', 'u'], ['f', 'w'])
+            return ca.Function('fn_yu_fw', [self.t.var(), self.y.var(), self.u.var()], [self.f, self.w], ['t', 'y', 'u'], ['f', 'w'])
         else:
-            return ca.Function('fn_yu_fgw', [self.y.var(), self.u.var()], [self.f, self.g, self.w], ['y', 'u'], ['f', 'g', 'w'])
-    # determine if
+            return ca.Function('fn_yu_fgw', [self.t.var(), self.y.var(), self.u.var()], [self.f, self.g, self.w], ['t', 'y', 'u'], ['f', 'g', 'w'])
+
+    # problem specific system parameters
+    def parameters(self): return []
+    # ocp continuous functions
+    def f_fn(self): return ca.vertcat()
+    def g_fn(self): return ca.vertcat()
+    def w_fn(self): return ca.vertcat()
+    # differential state equation bounds
+    def y_min(self): return np.array([])
+    def y_max(self): return np.array([])
+    # piece-wise constant control bounds
+    def u_min(self): return np.array([])
+    def u_max(self): return np.array([])
+    # algebraic path constraint bounds
+    def g_min(self): return np.array([])
+    def g_max(self): return np.array([])
+
+    # helper functions
     def has_DAE(self):
-        if self.ocp_fn.name() == 'fn_yu_fgw':
+        if self.F.name() == 'fn_yu_fgw':
             return True
         return False
-
-    # functions to be overwritten in problem child OCP class
-    def parameters(self): return []
-    def state_equations(self): return ca.vertcat()
-    def path_constraints(self): return ca.vertcat()
-    def quadrature_functions(self): return ca.vertcat()
-    def y_min(self): return np.array([])
-    def y_max(self): return np.array([])
-    def y_min(self): return np.array([])
-    def y_max(self): return np.array([])
 
 
 ''' New OPC formulations should be defined here, inheriting the base OCP class '''
@@ -69,13 +73,13 @@ class OCP:
 
 class CstrOCP(OCP):
 
-    def __init__(self):
-        OCP.__init__(self,"Acetylene hydrogenation process", 3, 1)
+    def __init__(self, T):
+        OCP.__init__(self,T, 3, 1, "Acetylene hydrogenation process")
 
     def parameters(self):
         return {'sigma1': 1000, 'sigma2': 472, 'beta': 23}
 
-    def state_equations(self):
+    def f_fn(self):
 
         x1 = self.y.var()[0]
         x2 = self.y.var()[1]
@@ -96,8 +100,21 @@ class CstrOCP(OCP):
 
         return ca.vertcat(odef1, odef2, odef3)
 
-    def quadrature_functions(self):
-        return -self.y.var()[2]
+    def g_fn(self):
+
+        x1 = self.y.var()[0]
+        x2 = self.y.var()[1]
+        x3 = self.y.var()[2]
+
+        u = self.u.var()[0]
+
+        dae1 = x3
+
+        return ca.vertcat(dae1)
+
+    def w_fn(self):
+        x3 = -self.y.var()[2]
+        return x3
 
         # variable constraints
     def u_min(self):
@@ -111,6 +128,13 @@ class CstrOCP(OCP):
 
     def y_max(self):
         return np.array([1.0,1.0,1.0])
+
+    def g_min(self):
+        return np.array([0.1])
+
+    def g_max(self):
+        return np.array([0.15])
+
 
 
 

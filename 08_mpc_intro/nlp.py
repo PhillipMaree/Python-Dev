@@ -9,14 +9,19 @@ class NLP:
 
     def __init__(self, td, N):
 
-        self.ocp = ocp()
+        # opc time horizon
+        T = td * N
 
+        # instantiate ocp structure
+        self.ocp = ocp(T)
+
+        # instantiate nlp structure
         self.nlp_config = {'collocation_method': 'legendre',
                            'collocation_degree': 3,
-                           'time_horizon': td * N,
+                           'time_horizon': T,
                            'num_phases': N,
                            'phase_step_size': td,
-                           'warm_start': True}
+                           'warm_start': False}
 
         # nlp structure
         self.nlp = {'J': 0, 'z': [], 'z0': [], 'lbz': [], 'ubz': [], 'g': [], 'lbg': [], 'ubg': [], 'warmstart': [], 'solver': lambda z0, lbz, ubz, lbg, ubg: ()}
@@ -111,10 +116,14 @@ class NLP:
                 for tau_r in range(degree): y_p += self.C[tau_r + 1, tau_j + 1] * y_c[tau_r]
 
                 if self.ocp.has_DAE():
-                    # TODO handle DAE
-                    f_tau_j, g_tau_j, w_tau_j = self.ocp.ocp_fn(y_c[tau_j], u_k)
+                    f_tau_j, g_tau_j, w_tau_j = self.ocp.F(phase_k*h, y_c[tau_j], u_k)
+
+                    self.nlp['g'].append(g_tau_j)
+                    self.nlp['lbg'].append(self.ocp.g_min())
+                    self.nlp['ubg'].append(self.ocp.g_max())
+
                 else:
-                    f_tau_j, w_tau_j = self.ocp.ocp_fn(y_c[tau_j], u_k)
+                    f_tau_j, w_tau_j = self.ocp.F(phase_k*h, y_c[tau_j], u_k)
 
                 self.nlp['g'].append(h * f_tau_j - y_p)
                 self.nlp['lbg'].append(np.zeros(self.ocp.y.dim()))
