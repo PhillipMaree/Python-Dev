@@ -43,31 +43,35 @@ class Extract:
 
         return self.df
 
+
 # construct the NLP from the inherited OCP problem. NLP formulation to the terminology of Betts, 2010, Ch4
 class NLP:
 
-    def __init__(self, h, N, collocation_method='legendre', collocation_degree=3):
+    def __init__(self, nlp_config):
 
         # collocation specific coefficients
-        self.B, self.C, self.D, self.K, self.tau = self.collocation(collocation_method, collocation_degree)
+        self.B, self.C, self.D, self.K, self.tau = self.collocation(nlp_config['collocation_method'], nlp_config['collocation_degree'])
 
         # instantiate ocp structure
         self.ocp = ocp()
 
         # nlp specific parameters
-        self.N = N
-        self.h = h
+        self.N = nlp_config['N']
+        self.h = nlp_config['h']
+        self.y_n = self.ocp.y.dim()
+        self.u_n = self.ocp.u.dim()
 
-        # for statistic purposes
-        self.u_var_N = self.N*self.ocp.u.dim()                                       # number of control variables
-        self.y_var_N = (self.N+1)*self.ocp.y.dim()                                   # number of state variables
-        self.c_var_N = self.N*self.K*self.ocp.y.dim()                               # number of collocation variables
-        self.nlp_var_N = self.u_var_N + self.y_var_N + self.c_var_N # total number of NLP variables
+        # for statistical purposes
+        self.u_var_N = self.N*self.u_n
+        self.y_var_N = (self.N+1)*self.y_n
+        self.c_var_N = self.N*self.K*self.y_n
+        self.nlp_var_N = self.u_var_N + self.y_var_N + self.c_var_N
 
+        # fast index offsetting
         self.y_offset = 0
         self.c_offset = 1
-        self.u_offset = self.c_offset + self.K
-        self.phase_offset = 2 + self.K
+        self.u_offset = (1 + self.K)
+        self.phase_offset = (1 + self.K) + 1
 
         # nlp structure
         self.nlp_struct = {'t': [], 'J': 0, 'z': [], 'z0': [], 'lbz': [], 'ubz': [], 'g': [], 'lbg': [], 'ubg': [], 'solver': lambda z0, lbz, ubz, lbg, ubg: ()}
@@ -75,13 +79,17 @@ class NLP:
         # construct empty NLP variable structure
         for i in range(self.N):
             self.add_time((i+self.tau[0])*self.h)
-            self.add_nlp_var( ca.MX.sym( self.ocp.y.name() + '_' + str(i), self.ocp.y.dim() ), self.ocp.y.lb(), self.ocp.y.ub(), self.ocp.y.lb() )
+            # add differential variable on phase boundary
+            self.add_nlp_var(ca.MX.sym( self.ocp.y.name() + '_' + str(i), self.ocp.y.dim() ), self.ocp.y.lb(), self.ocp.y.ub(), self.ocp.y.lb())
+            # add collocation variables
             for j in range(1,self.K+1):
                 self.add_time((i+self.tau[j])*self.h)
-                self.add_nlp_var( ca.MX.sym( self.ocp.y.name() + '_' + str(i) + '_' + str(j), self.ocp.y.dim() ), self.ocp.y.lb(), self.ocp.y.ub(), self.ocp.y.lb() )
-            self.add_nlp_var( ca.MX.sym( self.ocp.u.name() + '_' + str(i), self.ocp.u.dim() ), self.ocp.u.lb(), self.ocp.u.ub(), self.ocp.u.lb() )
-        self.add_time(N*self.h)
-        self.add_nlp_var( ca.MX.sym( self.ocp.y.name() + '_' + str(self.N), self.ocp.y.dim() ), self.ocp.y.lb(), self.ocp.y.ub(), self.ocp.y.lb() )
+                self.add_nlp_var(ca.MX.sym( self.ocp.y.name() + '_' + str(i) + '_' + str(j), self.ocp.y.dim() ), self.ocp.y.lb(), self.ocp.y.ub(), self.ocp.y.lb())
+            # add control variable
+            self.add_nlp_var(ca.MX.sym( self.ocp.u.name() + '_' + str(i), self.ocp.u.dim() ), self.ocp.u.lb(), self.ocp.u.ub(), self.ocp.u.lb())
+        self.add_time(self.N*self.h)
+        # add terminal differential variable
+        self.add_nlp_var(ca.MX.sym( self.ocp.y.name() + '_' + str(self.N), self.ocp.y.dim() ), self.ocp.y.lb(), self.ocp.y.ub(), self.ocp.y.lb())
 
         # construct nlp problem
         self.init_nlp()
@@ -141,12 +149,12 @@ class NLP:
                     y_i_p += self.C[tau_j, tau_k]*c(i,tau_j)
                 f_tau_k, w_tau_k = self.ocp.F(t(i,tau_j), c(i, tau_k), u(i))
                 self.add_nlp_res(y_i_p-self.h*f_tau_k, np.zeros(self.ocp.y.dim()), np.zeros(self.ocp.y.dim()))
-                self.add_cost(self.B[tau_k]*w_tau_k*self.h)
+                #self.add_cost(self.B[tau_k]*w_tau_k*self.h)
 
             # add phase cost
-            for tau_j in range(self.K):
+            for tau_j in range(self.K+1):
                 f_tau_j, w_tau_j = self.ocp.F(t(i,tau_j), c(i,tau_j), u(i))
-                self.add_cost( self.B[tau_j]*w_tau_j*self.h )
+                self.add_cost(self.B[tau_j]*w_tau_j*self.h)
 
         # terminal cost
         f_tau_N, w_tau_N = self.ocp.F(t(self.N,0), y(self.N), u(i))
