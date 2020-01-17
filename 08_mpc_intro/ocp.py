@@ -1,40 +1,45 @@
 import casadi as ca
 import numpy as np
 
+
+class Var:
+    def __init__(self,name,lb,ub,dim):
+        self.var_name = name
+        self.var_lb = lb
+        self.var_ub = ub
+        self.var_dim = dim
+        self.mx_var = ca.MX.sym(name,1,self.var_dim)
+
+    def name(self): return self.var_name
+    def lb(self): return self.var_lb
+    def ub(self): return self.var_ub
+    def var(self): return self.mx_var
+    def dim(self): return self.var_dim
+
+
 # This class defines the optimal control problem to be solved according to the terminology of Betts, 2010 Ch4
 class OCP:
 
-    class Variable:
-        def __init__(self,name,lb,ub,dim):
-            self.var_name = name
-            self.var_lb = lb
-            self.var_ub = ub
-            self.var_dim = dim
-            self.mx_var = ca.MX.sym(name,1,self.var_dim)
-
-        def name(self): return self.var_name
-        def lb(self): return self.var_lb
-        def ub(self): return self.var_ub
-        def var(self): return self.mx_var
-        def dim(self): return self.var_dim
-
-    def __init__(self,t , n_y=0, n_u=0, name="Empty OPC formulation"):
+    def __init__(self, n_y=0, n_u=0, name="Empty OPC formulation"):
         # problem name description
         self.name = name
+
         # time indexing
-        self.t = self.Variable('t',0 , t ,1)
+        self.t = Var('t', 0, np.inf, 1)
         # dynamic state variables
-        self.y = self.Variable('y',self.y_min(), self.y_max(),n_y)
+        self.y = Var('y',self.y_min(), self.y_max(),n_y)
         # dynamic control variables
-        self.u = self.Variable('u',self.u_min(), self.u_max(),n_u)
+        self.u = Var('u',self.u_min(), self.u_max(),n_u)
         # system parameters
         self.p = self.parameters()
+
         # dynamics of system in explicit ODE form
         self.f = self.f_fn()
         # algebraic path constraints
         self.g = self.g_fn()
         # cost functional
         self.w = self.w_fn()
+
         # casadi ocp functional
         self.F = self.F_fn()
 
@@ -73,8 +78,8 @@ class OCP:
 
 class CstrOCP(OCP):
 
-    def __init__(self, T):
-        OCP.__init__(self,T, 3, 1, "Acetylene hydrogenation process")
+    def __init__(self):
+        OCP.__init__(self, 3, 1, "Acetylene hydrogenation process")
 
     def parameters(self):
         return {'sigma1': 1000, 'sigma2': 472, 'beta': 23}
@@ -100,18 +105,6 @@ class CstrOCP(OCP):
 
         return ca.vertcat(odef1, odef2, odef3)
 
-    def g_fn(self):
-
-        x1 = self.y.var()[0]
-        x2 = self.y.var()[1]
-        x3 = self.y.var()[2]
-
-        u = self.u.var()[0]
-
-        dae1 = x3
-
-        return ca.vertcat(dae1)
-
     def w_fn(self):
         x3 = -self.y.var()[2]
         return x3
@@ -129,11 +122,6 @@ class CstrOCP(OCP):
     def y_max(self):
         return np.array([1.0,1.0,1.0])
 
-    def g_min(self):
-        return np.array([0.1])
-
-    def g_max(self):
-        return np.array([0.15])
 
 
 
