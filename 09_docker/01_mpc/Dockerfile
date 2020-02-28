@@ -9,6 +9,7 @@ ADD /include ./
 
 # build arguments, depending on availibility of thrirdparty software (set build time arguments -build-arg )
 
+ARG USER_NAME
 ARG COINHSL_SRC_PATH
 ARG CPLEX_SRC_PATH
 
@@ -157,6 +158,12 @@ RUN git clone https://github.com/casadi/casadi.git -b master /opt/Casadi \
    -DCPLEX_INCLUDE_DIR=$CPLEX_INC_DIR ..
 
 RUN cd /opt/Casadi/build && make && make install
+
+# create user working directory
+
+RUN useradd -ms /bin/bash $USER_NAME
+USER $USER_NAME
+WORKDIR /home/$USER_NAME
 
 
 

@@ -1,40 +1,42 @@
-# To build
+#### Integrated development environment for optimization
+This project entails a dockerfile formulation that encapsulates various solvers (both open source and propriety software)
+to be used to solver optimization problems. The target application is to be able to formulate Model Predictive Control 
+problem that can among other either be NLP, MINLP, MILP etc of nature.
 
-#### Build arguments and launch
-The following arguments can be used during building:
-
-Usage:
+The following solvers have been included in the dockerfile image:
     
+ 1. **Ipopt** (build with **HSL** libraries if supplied)
+ 2. **Bonmin** (build with **CPLEX** for MIQP, if supplied)
+ 3. **Casadi** (interfaces enabled are Ipopt, Bonmin, Python, Cplex)
+ 
+ #####Build docker image
+ The build the image from scratch, call:
+ 
+    ./docker_build.sh
+    
+The build.sh should be modified, based on availability of third-party libraries. By using the following flag,
+ 
     --build-arg ARG=[argument]
     
-Supported ARG types:
+one can supply values to the following arguments:
     
     COINHSL_SRC_PATH  [<string>] path of coinhsl with /include as base
     CPLEX_SRC_PATH [<string>] path to cplex binary to be installed
     
-To build, call i.e.:
+ #####Run docker container
+  The docker container will share the host's XServer to display GUI (ie., matplotlib.pyplot visualization) in the 
+  foreground of the host pc. The following command can be executed to run the docker container:
+  
+    ./dokcker_run.sh [options] 
     
-    docker build --rm -f Dockerfile --build-arg COINHSL_SRC_PATH=./coinhsl/coinhsl-2019.05.21.tar.gz  --build-arg CPLEX_SRC_PATH=./cplex/COSCE129LIN64.bin -t sintef_dev .
+    Options:
     
-To launch the container and mount your projects folder, run:
-
-    export PROJECTS_DIR=
-    docker run --detach --name sintef_mpc_dev_env --volume $PROJECTS_DIR:/projects
-
-
-####Troubleshooting
-1. If you cannot delpoy due to HTTP issues, then you need to re-authenticate dcos via:
-
-	docs auth login
-
-2. See SSH config file at:
-
-	~/.ssh/config
-
-3. Remove all docker images:
-
-	docker rmi -f $(docker images -a -q)
-
-4. Remove all docker containers:
-
-	docker rm -vf $(docker ps -a -q)
+    -w <string:path> [work directory path to be mounted in countainer at /home/$USER/string:path]
+    
+As default, the /work folder will be mounted if no options are specified 
+    
+ #####Purge docker containers and images (!!WARNING!!)
+ All images and containers can be purged running the following command:
+ 
+    ./docker_del.sh
+ 
