@@ -9,6 +9,20 @@ The following solvers have been included in the dockerfile image:
  2. **Bonmin** (build with **CPLEX** for MIQP, if supplied)
  3. **Casadi** (interfaces enabled are Ipopt, Bonmin, Python, Cplex)
  
+ #####Pull latest build docker image
+ To pull a pre-build image, execute:
+ 
+    docker image pull jpmaree/sintef-digital:latest
+ 
+ #####Push latest build docker image (require privileges)
+ Login to docker:
+ 
+    docker login
+    
+ Push latest build image
+ 
+    docker push jpmaree/sintef-digital:tagname
+ 
  #####Build docker image
  The build the image from scratch, call:
  
