@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     tf = 3                          # simulation interval
     N = 10                          # prediction horizon
-    h = 0.1                         # sampling rate
+    h = 0.25                         # sampling rate
     y_0 = [0.1, 0.1, 0.1]           # initial state
 
     # solve NMPC for closed-loop operation
