@@ -3,6 +3,8 @@ from nlp import NLP
 import numpy as np
 import pandas as pd
 
+import casadi as ca
+
 ''' NMPC implementation '''
 
 
@@ -10,7 +12,7 @@ class NMPC(NLP):
 
     def __init__(self, h, N, tf):
         self.tf = tf
-        self.nlp_config = {'h': h, 'N': N, 'collocation_method': 'legendre', 'collocation_degree': 3}
+        self.nlp_config = {'h': h, 'N': N, 'collocation_method': 'radau', 'collocation_degree': 6}
         NLP.__init__(self, self.nlp_config)
 
     def run(self, *y_0):
@@ -21,14 +23,14 @@ class NMPC(NLP):
             df_ol = self.solve_ocp(tk, *y_0)
             # build closed-loop evolutions
             df_cl = df_cl.append( df_ol.loc[0:self.nlp_config['collocation_degree'] ,['time', 'y1', 'y2', 'y3', 'u']], ignore_index=True )
+
             # "simulate" for next initial condition
             y_0 = np.array(df_ol.loc[1+self.nlp_config['collocation_degree'],['y1','y2','y3']])
         return df_cl
 
-
 if __name__ == '__main__':
 
-    tf = 3                          # simulation interval
+    tf = 2.5                         # simulation interval
     N = 10                          # prediction horizon
     h = 0.25                         # sampling rate
     y_0 = [0.1, 0.1, 0.1]           # initial state

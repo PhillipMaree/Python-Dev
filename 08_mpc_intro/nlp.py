@@ -32,14 +32,14 @@ class Extract:
             # extract state and collocation points and reshape [1+K,y_n]
             sol_y = sol_i[0:(1+self.K)*self.y_n].reshape(1+self.K,self.y_n)
             # extract controls and reshape [1,u_n]
-            sol_u = sol_i[(1+self.K)*self.y_n-self.u_n:-1].reshape(1,self.u_n)
+            sol_u = sol_i[(1+self.K)*self.y_n-self.u_n+1:].reshape(1,self.u_n)
             # append pandas dataframe
             for j in range(1+self.K):
                 i_j_idx = i*(1+self.K)+j
                 self.df.loc[i_j_idx] = np.append(t[i_j_idx], np.append(sol_y[j], sol_u[0]))
         # append final state boundary at i=N (extend previous control for completeness)
         N_idx = self.N*(1+self.K)
-        self.df.loc[N_idx] = np.append(t[N_idx], np.append(sol[-self.y_n-1:-1], sol_u[0]))
+        self.df.loc[N_idx] = np.append(t[N_idx], np.append(sol[-self.y_n:], sol_u[0]))
 
         return self.df
 
@@ -140,15 +140,16 @@ class NLP:
             y_i_end = self.D[0]*y(i)
             for tau_j in range(1,self.K+1):
                 y_i_end += self.D[tau_j]*c(i, tau_j)
-            self.add_nlp_res(y(i+1)-y_i_end, np.zeros(self.ocp.y.dim()), np.zeros(self.ocp.y.dim()))
+            self.add_nlp_res( y_i_end - y(i+1), np.zeros(self.ocp.y.dim()), np.zeros(self.ocp.y.dim()))
 
             # residual constraints for collocation equations
             for tau_k in range(1, self.K+1):
                 y_i_p = self.C[0, tau_k]*y(i)
                 for tau_j in range(1, self.K+1):
                     y_i_p += self.C[tau_j, tau_k]*c(i,tau_j)
-                f_tau_k, w_tau_k = self.ocp.F(t(i,tau_j), c(i, tau_k), u(i))
-                self.add_nlp_res(y_i_p-self.h*f_tau_k, np.zeros(self.ocp.y.dim()), np.zeros(self.ocp.y.dim()))
+                #f_tau_k, w_tau_k = self.ocp.F(t(i,tau_j), c(i, tau_k), u(i)) ?
+                f_tau_k, w_tau_k = self.ocp.F(t(i,tau_k), c(i, tau_k), u(i))
+                self.add_nlp_res(self.h*f_tau_k - y_i_p, np.zeros(self.ocp.y.dim()), np.zeros(self.ocp.y.dim()))
                 #self.add_cost(self.B[tau_k]*w_tau_k*self.h)
 
             # add phase cost
@@ -192,6 +193,12 @@ class NLP:
             # coefficients for
             ilj = np.polyint(lj)
             B[j] = ilj(1.0)
+
+        print("Eval Collocation points Int\n")
+        print("tau root {}\n".format(tau_root))
+        print("B {}\n".format(C))
+        print("C {}\n".format(C))
+        print("D {}\n".format(D))
 
         return B, C, D, K, tau_root
 
