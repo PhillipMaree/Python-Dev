@@ -12,7 +12,7 @@ class NMPC(NLP):
 
     def __init__(self, h, N, tf):
         self.tf = tf
-        self.nlp_config = {'h': h, 'N': N, 'collocation_method': 'radau', 'collocation_degree': 6}
+        self.nlp_config = {'h': h, 'N': N, 'collocation_method': 'legendre', 'collocation_degree': 3}
         NLP.__init__(self, self.nlp_config)
 
     def run(self, *y_0):

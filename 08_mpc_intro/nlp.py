@@ -171,7 +171,10 @@ class NLP:
 
     def collocation(self, method, degree):
 
-        tau_root = np.append(0, ca.collocation_points(degree, method))
+        if method == 'legendre':
+            tau_root = np.append(ca.collocation_points(degree, method), 1)
+        elif method == 'radau':
+            tau_root = np.append(0, ca.collocation_points(degree, method))
 
         K = degree
         B = np.zeros(K + 1)
